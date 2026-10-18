@@ -14,7 +14,7 @@ and reads the same LiteLLM probe key and spend data.
 ## Example output
 
 ```
-╭─────────────────────────── gx10-leo · qwen3.8-flash-next-uncensored ───────────────────────────╮
+╭─────────────────────────── gx10-head · qwen3.8-flash-next-uncensored ───────────────────────────╮
 │                                                                                                │
 │  System       load 0.65 1.27 2.18 · DGX 53C                                                    │
 │  GPU          NVIDIA GB10 0% · 51C · 11.51W                                                    │
