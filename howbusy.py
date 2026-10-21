@@ -191,6 +191,23 @@ def dgx_temp():
     return f"{best // 1000}C" if best else "?"
 
 
+def container_for():
+    """Map the current lane (/etc/vllm/current_model) to its podman container so
+    the log-derived throughput works for any model, not just qwen (vllm-fn)."""
+    lane = {"qwen38": "vllm-fn", "glm": "vllm_glm53", "deepseek": "b12x-vllm-node"}
+    try:
+        cur = open("/etc/vllm/current_model").read().strip()
+    except Exception:
+        cur = ""
+    if cur in lane:
+        return lane[cur]
+    running = sh("sudo -u \"${SUDO_USER:-$(id -un)}\" podman ps --format '{{.Names}}'")
+    for c in running.splitlines():
+        if c in lane.values():
+            return c
+    return "vllm-fn"
+
+
 def main():
     mt = get(f"{VLLM}/metrics")
     running = metric(mt, "num_requests_running")
@@ -208,7 +225,7 @@ def main():
     p_h = metric(mt, "prefix_cache_hits_total")
     prefix_pct = f"{p_h / p_q * 100:.1f}" if (p_q and p_h is not None) else "?"
 
-    log = sh(f"sudo -u \"${{SUDO_USER:-$(id -un)}}\" podman logs --tail 2000 {CONT}")
+    log = sh(f"sudo -u \"${SUDO_USER:-$(id -un)}\" podman logs --tail 2000 {container_for()}")
     eng = last_line(log, "Engine 000:")
     mtp = last_line(log, "SpecDecoding metrics:")
     gen_tp = re.search(r"Avg generation throughput: ([\d.]+)", eng)
