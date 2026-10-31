@@ -14,6 +14,7 @@ window is shown in the label so the number is interpretable.
 from __future__ import annotations
 
 import json
+import os
 import re
 import socket
 import subprocess
@@ -201,7 +202,8 @@ def container_for():
         cur = ""
     if cur in lane:
         return lane[cur]
-    running = sh("sudo -u \"${SUDO_USER:-$(id -un)}\" podman ps --format '{{.Names}}'")
+    pu = os.environ.get("SUDO_USER") or sh("id -un") or "root"
+    running = sh(f"sudo -u {pu} podman ps --format '{{.Names}}'")
     for c in running.splitlines():
         if c in lane.values():
             return c
@@ -225,7 +227,13 @@ def main():
     p_h = metric(mt, "prefix_cache_hits_total")
     prefix_pct = f"{p_h / p_q * 100:.1f}" if (p_q and p_h is not None) else "?"
 
-    log = sh(f"sudo -u \"${SUDO_USER:-$(id -un)}\" podman logs --tail 2000 {container_for()}")
+    pu = os.environ.get("SUDO_USER") or sh("id -un") or "root"
+    cid = sh(f"sudo -u {pu} podman inspect {container_for()} --format '{{{{.Id}}}}'")
+    # podman logs is journald-backed here and scans the whole journal (slow, and
+    # it grows with uptime until the sh() timeout -> "?"); a bounded journalctl
+    # tail by CONTAINER_ID_FULL is O(tail) and fast. shortcut: if inspect fails
+    # we show "?" (status tool), <upgrade to a LogPath/json-file tail if needed>.
+    log = sh(f"sudo journalctl --no-pager -n 400 CONTAINER_ID_FULL={cid}", timeout=15) if cid else ""
     eng = last_line(log, "Engine 000:")
     mtp = last_line(log, "SpecDecoding metrics:")
     gen_tp = re.search(r"Avg generation throughput: ([\d.]+)", eng)
